@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document</title>
+</head>
+<body>
+  <button id="connect">更新韌體</button><span id='progress'></span>
+</body>
+<script src="lib/pako_inflate.min.js"></script>
+<script src="lib/crc.js"></script>
+<script type="module">
+  let firmware = null; 
+  import kflash from "./kflash.js"; 
+  fetch("firmware/webai.bin")
+    .then((response) => { return response.blob(); })
+    .then((data) => { 
+        firmware = data; 
+        console.log(firmware); 
+    }); 
+    connect.onclick = async () => { 
+        await kflash.requestSerialPort(); 
+        await kflash.write(0x000000, firmware, (percent)=>{
+            progress.innerHTML = `進度 ${percent}%`;    
+        }); 
+    };
+</script>
+
+</html>

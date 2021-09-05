@@ -1,0 +1,34 @@
+<html lang="en">
+
+<head>
+  <script type="text/javascript" src="repl.js"></script>
+</head>
+
+<body>
+  <button id="upload">upload</button><br>
+  <div id='msg'>wait to connect...</div>
+  <textarea id="ctx" rows="20" style="width:320px"></textarea>
+  <script type="text/javascript">
+  var repl = new REPL()
+    fetch('./demo.py').then(function (response) {
+      return response.text();
+    }).then(async function (text) {
+      ctx.value = text;
+      msg.innerHTML = '';
+    });
+
+  upload.addEventListener('click', async () => {
+    upload.disabled = true;
+    var file = 'main.py';
+    await repl.connectBoard()
+    msg.innerHTML = 'uploading...';
+    await repl.enterRAWREPL()
+    var size = await repl.uploadFile(ctx.value, file);
+    msg.innerHTML = 'upload ' + file + ' ,size:' + size + ' bytes';
+    await repl.restart();
+    upload.disabled = false;
+  })
+  </script>
+</body>
+
+</html>
