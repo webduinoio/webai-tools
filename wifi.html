@@ -1,0 +1,30 @@
+<html lang="en">
+
+<head>
+  <script type="text/javascript" src="repl.js"></script>
+</head>
+
+<body>
+    <div class="container">
+      <label>WiFi SSID : </label>
+      <input id='ssid' type="text" value='KingKit_2.4G'><br>
+      <label>WiFi Password : </label>
+      <input id='pwd' type="current-password" value='webduino'>
+    </div>
+    <button id="setWiFi">設定 WiFi</button><br>
+  <div id='msg'>wait to connect...</div>
+  <script type="text/javascript">
+  var repl = new REPL()
+
+  setWiFi.addEventListener('click', async () => {
+    await repl.connectBoard()
+    msg.innerHTML = 'set wifi...';
+    await repl.enterRAWREPL();
+    var state = await repl.setWiFi(ssid.value,pwd.value);
+    msg.innerHTML = 'set wifi: ' + state;
+    await repl.restart();
+  })
+  </script>
+</body>
+
+</html>

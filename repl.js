@@ -45,6 +45,8 @@ class REPL {
   }
 
   async restart() {
+    await this.port.setSignals({ dataTerminalReady: true });
+    await new Promise(resolve => setTimeout(resolve, 100));
     await this.port.setSignals({ dataTerminalReady: false });
     await new Promise(resolve => setTimeout(resolve, 100));
     await this.port.setSignals({ dataTerminalReady: true });
@@ -61,11 +63,10 @@ class REPL {
       await this.writer.write(Int16Array.from([0x13, 0x01]));
       await this.waitResponse("raw REPL; CTRL-B to exit");
       await this.writer.write(this.encoder.encode("\x05A\x01"));
-    } while (false==await this.waitResponse("raw REPL; CTRL-B to exit"));
+    } while (false == await this.waitResponse("raw REPL; CTRL-B to exit"));
   }
 
-  async waitResponse(msg) {
-    var retryLimit = 100;
+  async waitResponse(msg, retryLimit = 100) {
     while (--retryLimit > 0) {
       await new Promise(resolve => setTimeout(resolve, 10));
       if (this.resp.indexOf(msg) >= 0) {
@@ -77,8 +78,8 @@ class REPL {
     return false;
   }
 
-  async waitWriteCompleted(file,msg) {
-    var retryLimit = 5000;
+  async waitWriteCompleted(file, msg) {
+    var retryLimit = 1000;
     while (--retryLimit > 0) {
       await new Promise(resolve => setTimeout(resolve, 10));
       if (this.resp.indexOf("f.write") >= 0) {
@@ -86,7 +87,7 @@ class REPL {
           continue;
         }
         var size = this.resp.split('\n')[1].trim();
-        console.log("upload file:",file," ,size:", size);
+        console.log("upload file:", file, " ,size:", size);
         this.resp = '';
         return size;
       }
@@ -104,9 +105,21 @@ class REPL {
     await this.sendCmd('f = open("' + file + '","w")');
     await this.waitResponse("f = open(");
     await this.sendCmd('f.write(code)');
-    var size = await this.waitWriteCompleted(file,"f.write(code)");
+    var size = await this.waitWriteCompleted(file, "f.write(code)");
     await this.sendCmd('f.close()');
     await this.waitResponse("f.close()");
     return size;
   }
+
+  async setWiFi(ssid, pwd) {
+    await this.writer.write(this.encoder.encode("\x04"));
+    await this.waitResponse("OK");
+    await this.writer.write(Int16Array.from([0x13, 0x02]));
+    await this.waitResponse("WebAI with kendryte-k210");
+    await this.sendCmd('from webai import *');
+    await this.waitResponse("memtest: None", 500);
+    await this.sendCmd('webai.wifi("' + ssid + '","' + pwd + '")');
+    return await this.waitResponse("save");    
+  }
+
 }

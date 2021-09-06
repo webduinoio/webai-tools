@@ -12,9 +12,9 @@ class ReadThread {
         setTimeout(async function() {
             while (true) {
                 const { value, done } = await self.port.reader.read();
-                console.log("read:", value)
+                //console.log("read:", value)
             }
-        }, 1000)
+        }, 10)
     }
 }
 
@@ -40,7 +40,7 @@ class Port {
         });
         await this.openReader();
         await this.openWriter();
-        //this.rThread.start()
+        this.rThread.start()
     }
 
     async close() {
@@ -338,12 +338,11 @@ class KFlash {
                     let op = 0;
                     let reason = 0;
                     let text = "";
+
                     try {
-                        console.log("wait..")
                         const result = FlashModeResponse.parse(
                             await this.recv_one_return()
                         );
-                        console.log("resp..")
                         op = result[0];
                         reason = result[1];
                         text = result[2];
