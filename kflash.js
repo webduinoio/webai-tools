@@ -418,11 +418,11 @@ class KFlash {
                         );
 
                         let packet = [...op_p, ...crc32_checksum, ...address_p, ...chunk];
+
                         // console.log(packet);
                         // console.log(packet.map((e) => e.toString(16)));
-                        console.log(">>>write", `0x${address.toString(16)}`, packet.length);
-
-
+                        console.log("write", `0x${address.toString(16)}`, packet.length);
+                        await delay(0.1);
                         await this.write(packet);
                         _port.writer.releaseLock()
                         _port.openWriter()
