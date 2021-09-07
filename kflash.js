@@ -49,67 +49,6 @@ class Port {
         await this.writer.releaseLock();
     }
 
-    async writeLine(data) {
-        var uint8array = this.textEncoder.encode(data + "\r\n");
-        await this.writer.write(uint8array);
-    }
-
-    async restart() {
-        await this.serialPort.setSignals({ dataTerminalReady: false });
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        await this.serialPort.setSignals({ dataTerminalReady: true });
-    }
-
-    readLine(buf) {
-        var text = "";
-        for (var i = 0; i < buf.length; i++) {
-            text += String.fromCharCode(buf[i]);
-            if (buf[i] == 0x0a) break;
-        }
-        text = text.trim();
-        buf = buf.subarray(i + 1);
-        return { text: text, buf: buf };
-    }
-
-    monitorRead(timeout) {
-        var self = this;
-        setTimeout(function() {
-            console.log("monitorRead --> readyToRead:", self.readyToRead);
-            if (!self.readyToRead) {
-                console.log("read failure !!");
-                //self.serialPort.setSignals({ 'break': true });
-            }
-        }, timeout);
-    }
-
-    async readByteArray() {
-        this.readyToRead = false;
-        //this.monitorRead(timeout);
-        //console.log("read len")
-        var { value, done } = await this.reader.read();
-        var { text, buf } = this.readLine(value);
-        var bufSize = parseInt(text);
-        var data = new Uint8Array(bufSize);
-        //console.log("text:", text, " ,buf:", buf.length,",data:",buf)
-        try {
-            data.set(buf, 0);
-        } catch (e) {
-            throw "text:" + text + " ,buf:" + buf.length;
-        }
-        var readSize = buf.length;
-        while (readSize < bufSize) {
-            //console.log("try to read...")
-            await new Promise((r) => setTimeout(r, 20));
-            //this.monitorRead(timeout);
-            var { value, done } = await this.reader.read();
-            data.set(value, readSize);
-            readSize += value.length;
-            //console.log("progress:", readSize , '/', bufSize)
-        }
-        this.readyToRead = true;
-        return data;
-    }
-
     async setDTR(value) {
         await this.serialPort.setSignals({ dataTerminalReady: value });
     }
@@ -129,7 +68,7 @@ class KFlash {
 
     async write(address, blob, listener) {
         const _port = this.port;
-        const ISP_RECEIVE_TIMEOUT = 1;
+        const ISP_RECEIVE_TIMEOUT = 2;
         const MAX_RETRY_TIMES = 10;
         const ISP_FLASH_SECTOR_SIZE = 4096;
         const ISP_FLASH_DATA_FRAME_SIZE = ISP_FLASH_SECTOR_SIZE * 16;
@@ -424,8 +363,8 @@ class KFlash {
                         console.log("write", `0x${address.toString(16)}`, packet.length);
                         await delay(0.1);
                         await this.write(packet);
-                        _port.writer.releaseLock()
-                        _port.openWriter()
+                        await _port.writer.releaseLock()
+                        await _port.openWriter()
                         if (await this.recv_debug()) {
                             address += DATAFRAME_SIZE;
                             nowSize += DATAFRAME_SIZE;
@@ -570,6 +509,7 @@ class KFlash {
                         }
                     }
                 }
+                await delay(0.5);
                 console.log(`Burn Firmware OK`);
             }
         }
@@ -631,7 +571,5 @@ class KFlash {
     }
 }
 
-
 const kflash = new KFlash();
-
 export default kflash;
