@@ -44,13 +44,37 @@ class REPL {
     await this.writer.write(this.encoder.encode(str + '\r\n'));
   }
 
-  async restart() {
-    await this.port.setSignals({ dataTerminalReady: true });
-    await new Promise(resolve => setTimeout(resolve, 100));
+  async restart_old() {
     await this.port.setSignals({ dataTerminalReady: false });
     await new Promise(resolve => setTimeout(resolve, 100));
     await this.port.setSignals({ dataTerminalReady: true });
     await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  async delay(sec) {
+    await new Promise(resolve => setTimeout(resolve, sec*1000));
+  }
+
+  async setDTR(value) {
+      await this.port.setSignals({ dataTerminalReady: value });
+  }
+
+  async setRTS(value) {
+      await this.port.setSignals({ requestToSend: value });
+  }
+
+  async restart() {
+      await this.setDTR(0);
+      await this.setRTS(0);
+      await this.delay(0.1);
+
+      await this.setDTR(0);
+      await this.setRTS(1);
+      await this.delay(0.1);
+
+      await this.setRTS(0);
+      await this.setDTR(0);
+      await this.delay(2);
   }
 
   async enterRAWREPL() {
@@ -71,6 +95,7 @@ class REPL {
       await new Promise(resolve => setTimeout(resolve, 10));
       if (this.resp.indexOf(msg) >= 0) {
         await new Promise(resolve => setTimeout(resolve, 100));
+        //console.log(this.resp);
         this.resp = '';
         return true;
       }
@@ -111,15 +136,18 @@ class REPL {
     return size;
   }
 
-  async setWiFi(ssid, pwd) {
-    await this.writer.write(this.encoder.encode("\x04"));
+
+  async setWiFi(pythonCode,ssid,pwd) {
+    pythonCode = 'code="""\n' + pythonCode + '\n"""';
+    pythonCode = pythonCode.replace('\\', '\\\\');
+    await this.writer.write(this.encoder.encode(pythonCode + "\x04"));
     await this.waitResponse("OK");
     await this.writer.write(Int16Array.from([0x13, 0x02]));
     await this.waitResponse("WebAI with kendryte-k210");
-    await this.sendCmd('from webai import *');
-    await this.waitResponse("memtest: None", 500);
-    await this.sendCmd('webai.wifi("' + ssid + '","' + pwd + '")');
-    return await this.waitResponse("save");    
+    await this.sendCmd('cfg.init()');
+    await this.waitResponse("cfg.init()");
+    await this.sendCmd("cfg.put('wifi',{'ssid':'" + ssid + "','pwd':'" + pwd + "'})");
+    return this.waitResponse("save",500);
   }
 
 }

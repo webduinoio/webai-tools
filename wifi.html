@@ -5,24 +5,28 @@
 </head>
 
 <body>
-    <div class="container">
-      <label>WiFi SSID : </label>
-      <input id='ssid' type="text" value='KingKit_2.4G'><br>
-      <label>WiFi Password : </label>
-      <input id='pwd' type="current-password" value='webduino'>
-    </div>
-    <button id="setWiFi">設定 WiFi</button><br>
+  <div class="container">
+    <label>WiFi SSID : </label>
+    <input id='ssid' type="text" value='KingKit_2.4G'><br>
+    <label>WiFi Password : </label>
+    <input id='pwd' type="current-password" value='webduino'>
+  </div>
+  <button id="setWiFi">設定 WiFi</button><br>
   <div id='msg'>wait to connect...</div>
   <script type="text/javascript">
   var repl = new REPL()
 
   setWiFi.addEventListener('click', async () => {
-    await repl.connectBoard()
-    msg.innerHTML = 'set wifi...';
-    await repl.enterRAWREPL();
-    var state = await repl.setWiFi(ssid.value,pwd.value);
-    msg.innerHTML = 'set wifi: ' + state;
-    await repl.restart();
+    fetch('./wifi.py').then(function (response) {
+      return response.text();
+    }).then(async function (text) {
+      await repl.connectBoard();
+      msg.innerHTML = 'set wifi...';
+      await repl.enterRAWREPL();
+      var state = await repl.setWiFi(text,ssid.value, pwd.value);
+      msg.innerHTML = 'set wifi: ' + state;
+      await repl.restart();
+    });
   })
   </script>
 </body>
