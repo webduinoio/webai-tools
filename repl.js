@@ -44,37 +44,11 @@ class REPL {
     await this.writer.write(this.encoder.encode(str + '\r\n'));
   }
 
-  async restart_old() {
+  async restart() {
     await this.port.setSignals({ dataTerminalReady: false });
     await new Promise(resolve => setTimeout(resolve, 100));
     await this.port.setSignals({ dataTerminalReady: true });
     await new Promise(resolve => setTimeout(resolve, 2000));
-  }
-
-  async delay(sec) {
-    await new Promise(resolve => setTimeout(resolve, sec*1000));
-  }
-
-  async setDTR(value) {
-      await this.port.setSignals({ dataTerminalReady: value });
-  }
-
-  async setRTS(value) {
-      await this.port.setSignals({ requestToSend: value });
-  }
-
-  async restart() {
-      await this.setDTR(0);
-      await this.setRTS(0);
-      await this.delay(0.1);
-
-      await this.setDTR(0);
-      await this.setRTS(1);
-      await this.delay(0.1);
-
-      await this.setRTS(0);
-      await this.setDTR(0);
-      await this.delay(2);
   }
 
   async enterRAWREPL() {
