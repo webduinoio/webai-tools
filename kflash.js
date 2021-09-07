@@ -3,32 +3,15 @@ import ISP_PROG from "./lib/isp.js";
 
 const delay = async(sec) => new Promise((r) => setTimeout(r, sec * 1000));
 
-class ReadThread {
-    constructor(port) {
-        this.port = port
-    }
-    start() {
-        var self = this;
-        setTimeout(async function() {
-            while (true) {
-                const { value, done } = await self.port.reader.read();
-                console.log("read:", value)
-            }
-        }, 1000)
-    }
-}
-
 class Port {
     async init() {
         const serial = navigator.serial;
         const filter = { usbVendorId: 6790 };
         this.serialPort = await serial.requestPort({ filters: [filter] });
         const speed = 115200 * 1;
-        this.rThread = new ReadThread(this);
         await this.serialPort.open({
             baudRate: speed,
-            bufferSize: 1 * 32 * 1024,
-            dataBits: 8,stopBits: 1
+            bufferSize: 256 * 1024
         });
         this.textEncoder = new TextEncoder();
     }
@@ -36,11 +19,10 @@ class Port {
     async changeBaud(speed) {
         await this.close();
         await this.serialPort.open({
-            baudRate: speed,dataBits: 8,stopBits: 1
+            baudRate: speed
         });
         await this.openReader();
         await this.openWriter();
-        //this.rThread.start()
     }
 
     async close() {
@@ -55,7 +37,7 @@ class Port {
     }
 
     async releaseReader() {
-        this.reader.releaseLock();
+        await this.reader.releaseLock();
     }
 
     async openWriter() {
@@ -89,6 +71,45 @@ class Port {
         return { text: text, buf: buf };
     }
 
+    monitorRead(timeout) {
+        var self = this;
+        setTimeout(function() {
+            console.log("monitorRead --> readyToRead:", self.readyToRead);
+            if (!self.readyToRead) {
+                console.log("read failure !!");
+                //self.serialPort.setSignals({ 'break': true });
+            }
+        }, timeout);
+    }
+
+    async readByteArray() {
+        this.readyToRead = false;
+        //this.monitorRead(timeout);
+        //console.log("read len")
+        var { value, done } = await this.reader.read();
+        var { text, buf } = this.readLine(value);
+        var bufSize = parseInt(text);
+        var data = new Uint8Array(bufSize);
+        //console.log("text:", text, " ,buf:", buf.length,",data:",buf)
+        try {
+            data.set(buf, 0);
+        } catch (e) {
+            throw "text:" + text + " ,buf:" + buf.length;
+        }
+        var readSize = buf.length;
+        while (readSize < bufSize) {
+            //console.log("try to read...")
+            await new Promise((r) => setTimeout(r, 20));
+            //this.monitorRead(timeout);
+            var { value, done } = await this.reader.read();
+            data.set(value, readSize);
+            readSize += value.length;
+            //console.log("progress:", readSize , '/', bufSize)
+        }
+        this.readyToRead = true;
+        return data;
+    }
+
     async setDTR(value) {
         await this.serialPort.setSignals({ dataTerminalReady: value });
     }
@@ -108,7 +129,7 @@ class KFlash {
 
     async write(address, blob, listener) {
         const _port = this.port;
-        const ISP_RECEIVE_TIMEOUT = 3;
+        const ISP_RECEIVE_TIMEOUT = 1;
         const MAX_RETRY_TIMES = 10;
         const ISP_FLASH_SECTOR_SIZE = 4096;
         const ISP_FLASH_DATA_FRAME_SIZE = ISP_FLASH_SECTOR_SIZE * 16;
@@ -177,7 +198,10 @@ class KFlash {
             };
 
             static parse(data) {
-                //console.log("FlashModeResponse parse",data.map((e) => e.toString(16)));
+                console.log(
+                    "FlashModeResponse parse",
+                    data.map((e) => e.toString(16))
+                );
                 let op = parseInt(data[0]);
                 let reason = parseInt(data[1]);
                 let text = "";
@@ -191,19 +215,17 @@ class KFlash {
         class MAIXLoader {
             async write(packet) {
                 let handlePacket = [];
+
                 packet.forEach((e) => {
                     if (e === 0xc0) handlePacket.push(0xdb, 0xdc);
                     else if (e === 0xdb) handlePacket.push(0xdb, 0xdd);
                     else handlePacket.push(e);
                 });
-                const uint8 = new Uint8Array([0xc0, ...handlePacket, 0xc0]);
-                await _port.openWriter()
-                await _port.writer.write(uint8);
-                await _port.releaseWriter()
-            }
 
-            async releaseLock() {
-                _port.releaseWriter()
+                // console.log([0xc0, ...handlePacket, 0xc0].map((e) => e.toString(16)));
+                // console.log([0xc0, ...handlePacket, 0xc0].length);
+                const uint8 = new Uint8Array([0xc0, ...handlePacket, 0xc0]);
+                await _port.writer.write(uint8);
             }
 
             async reset_to_isp() {
@@ -283,6 +305,11 @@ class KFlash {
 
                         data.push(c);
                     }
+
+                    // console.log(
+                    //   data.map((e) => `0x${e.toString(16)}`),
+                    //   done
+                    // );
                     return data;
                 }
             }
@@ -310,23 +337,19 @@ class KFlash {
             }
 
             async greeting() {
-                //console.log("greeting....");
+                console.log("greeting....");
                 await _port.writer.write(
                     new Uint8Array([
                         0xc0, 0xc2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0xc0,
                     ])
                 );
-                await _port.releaseWriter()
                 ISPResponse.parse(await this.recv_one_return());
             }
 
             async flash_greeting() {
                 retry_count = 0;
-                await _port.releaseWriter()
-                await _port.openWriter()
                 while (true) {
-                    console.log("flash_greeting>>")
                     await _port.writer.write(
                         new Uint8Array([
                             0xc0, 0xd2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -338,17 +361,14 @@ class KFlash {
                     let op = 0;
                     let reason = 0;
                     let text = "";
+
                     try {
-                        console.log("wait..")
                         const result = FlashModeResponse.parse(
                             await this.recv_one_return()
                         );
-                        console.log("resp..")
                         op = result[0];
                         reason = result[1];
                         text = result[2];
-                        console.log("flash_greeting>>",op,reason,text)
-
                     } catch (e) {
                         console.log("Failed to Connect to K210's Stub");
                         await delay(0.1);
@@ -371,13 +391,11 @@ class KFlash {
                         await delay(0.1);
                     }
                 }
-                await _port.releaseWriter()
             }
 
-            async flash_dataframe(data, address = 0x80000000,listener) {
+            async flash_dataframe(data, address = 0x80000000, listener) {
                 const DATAFRAME_SIZE = 1024;
                 data = Array.from(data);
-                this.releaseLock()
                 var totalSize = data.length;
                 var nowSize = 0;
                 while (data.length) {
@@ -400,20 +418,27 @@ class KFlash {
                         );
 
                         let packet = [...op_p, ...crc32_checksum, ...address_p, ...chunk];
+                        // console.log(packet);
+                        // console.log(packet.map((e) => e.toString(16)));
+                        console.log(">>>write", `0x${address.toString(16)}`, packet.length);
+
+
                         await this.write(packet);
-                        await this.recv_debug()
-                        await delay(0.1)
-                        address += DATAFRAME_SIZE;
-                        nowSize += DATAFRAME_SIZE;
-                        listener(parseInt(nowSize/totalSize*10));
-                        break;
+                        _port.writer.releaseLock()
+                        _port.openWriter()
+                        if (await this.recv_debug()) {
+                            address += DATAFRAME_SIZE;
+                            nowSize += DATAFRAME_SIZE;
+                            listener(parseInt(nowSize / totalSize * 10));
+                            break;
+                        }
                     }
                 }
                 console.log(`Downlaod ISP OK`);
             }
 
-            async install_flash_bootloader(data,listener) {
-                await this.flash_dataframe(data, 0x80000000,listener);
+            async install_flash_bootloader(data, listener) {
+                await this.flash_dataframe(data, 0x80000000, listener);
             }
 
             async change_baudrate(baudrate = 2000000) {
@@ -436,6 +461,7 @@ class KFlash {
 
             async boot(address = 0x80000000) {
                 console.log("Booting From", `0x${address.toString(16)}`);
+
                 const address_p = new Uint8Array(struct("<II").pack(address, 0));
                 const crc32_checksum = new Uint8Array(
                     struct("<I").pack(crc.crc32(address_p) & 0xffffffff)
@@ -500,15 +526,13 @@ class KFlash {
                 }
             }
 
-            async flash_firmware(address_offset,firmware_bin, listener) {
+            async flash_firmware(firmware_bin, address_offset = 0, listener) {
                 if (firmware_bin instanceof Blob) {
                     firmware_bin = await firmware_bin.arrayBuffer();
                 }
                 firmware_bin = Array.from(new Uint8Array(firmware_bin));
                 var totalSize = firmware_bin.length;
                 var nowSize = 0;
-                //test
-                this.releaseLock()
                 while (firmware_bin.length) {
                     const chunk = firmware_bin.splice(0, ISP_FLASH_DATA_FRAME_SIZE);
 
@@ -516,28 +540,35 @@ class KFlash {
                         chunk.push(0);
                     }
 
-                    const op_p = new Uint8Array(
-                        struct("<HH").pack(
-                            FlashModeResponse.Operation.ISP_FLASH_WRITE,
-                            0x00
-                        )
-                    );
-                    const address_p = new Uint8Array(
-                        struct("<II").pack(address, chunk.length)
-                    );
+                    while (true) {
+                        const op_p = new Uint8Array(
+                            struct("<HH").pack(
+                                FlashModeResponse.Operation.ISP_FLASH_WRITE,
+                                0x00
+                            )
+                        );
+                        const address_p = new Uint8Array(
+                            struct("<II").pack(address, chunk.length)
+                        );
 
-                    const crc32_checksum = new Uint8Array(
-                        struct("<I").pack(
-                            crc.crc32([...address_p, ...chunk]) & 0xffffffff
-                        )
-                    );
-                    nowSize += chunk.length;
-                    let packet = [...op_p, ...crc32_checksum, ...address_p, ...chunk];
-                    console.log()
-                    await this.write(packet);
-                    address += ISP_FLASH_DATA_FRAME_SIZE;
-                    var percent = parseInt(parseInt(nowSize/totalSize*10000)/110)
-                    listener(percent+10);
+                        const crc32_checksum = new Uint8Array(
+                            struct("<I").pack(
+                                crc.crc32([...address_p, ...chunk]) & 0xffffffff
+                            )
+                        );
+                        let packet = [...op_p, ...crc32_checksum, ...address_p, ...chunk];
+                        // console.log(packet);
+                        // console.log(packet.map((e) => e.toString(16)));
+                        console.log("write", `0x${address.toString(16)}`);
+                        await this.write(packet);
+                        if (await this.recv_debug()) {
+                            nowSize += chunk.length;
+                            address += ISP_FLASH_DATA_FRAME_SIZE;
+                            var percent = parseInt(parseInt(nowSize / totalSize * 10000) / 110)
+                            listener(percent + 10);
+                            break;
+                        }
+                    }
                 }
                 console.log(`Burn Firmware OK`);
             }
@@ -573,7 +604,7 @@ class KFlash {
 
         // 2. download bootloader and firmware
         console.log("download bootloader and firmware");
-        await this.loader.install_flash_bootloader(isp_compressed,listener);
+        await this.loader.install_flash_bootloader(isp_compressed, listener);
 
         // Boot the code from SRAM
         await this.loader.boot();
@@ -586,14 +617,13 @@ class KFlash {
 
         console.log("change_baudrate");
         await this.loader.change_baudrate();
-
         console.log("flash_greeting");
         await this.loader.flash_greeting();
         console.log("init_flash");
         await this.loader.init_flash();
 
         console.log("flash_firmware");
-        await this.loader.flash_firmware(address, blob, listener);
+        await this.loader.flash_firmware(blob, 0, listener);
 
         // 3. boot
         await this.loader.reset_to_boot();
@@ -601,5 +631,7 @@ class KFlash {
     }
 }
 
+
 const kflash = new KFlash();
+
 export default kflash;
