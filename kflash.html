@@ -8,7 +8,12 @@
   <title>Document</title>
 </head>
 <body>
-  <button id="connect">更新韌體</button><span id='progress'></span>
+  <select id="baudrate">
+    <option value="1000000">低 - 1000000</option>
+    <option value="1500000" selected>中 - 1500000</option>
+    <option value="2000000">高 - 2000000</option>
+  </select>
+  <button id="connect">更新韌體</button><span id='progress'></span> <span id='interval'></span>
 </body>
 <script src="lib/pako_inflate.min.js"></script>
 <script src="lib/crc.js"></script>
@@ -22,10 +27,15 @@
         console.log(firmware); 
     }); 
     connect.onclick = async () => { 
-        await kflash.requestSerialPort(); 
+        let start_time = null;
+        await kflash.requestSerialPort();
+        kflash.setBaudRate(baudrate.options[baudrate.selectedIndex].value); 
         await kflash.write(0x000000, firmware, (percent)=>{
-            progress.innerHTML = `進度 ${percent}%`;    
-        }); 
+            if (percent === 0) start_time = new Date();
+            const end_time = new Date();
+            progress.innerHTML = `進度 ${percent}%`;
+            interval.innerHTML = `時間 ${(end_time - start_time) / 1000}s`
+        });
     };
 </script>
 
