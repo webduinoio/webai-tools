@@ -65,7 +65,9 @@ class KFlash {
         await this.port.openReader();
         await this.port.openWriter();
     }
-
+    async setBaudRate(baudrate = 2000000) {
+        this.baudRate = baudrate
+    }
     async write(address, blob, listener) {
         const _port = this.port;
         const ISP_RECEIVE_TIMEOUT = 2;
@@ -556,7 +558,7 @@ class KFlash {
         await this.loader.flash_greeting();
 
         console.log("change_baudrate");
-        await this.loader.change_baudrate();
+        await this.loader.change_baudrate(this.baudRate);
         console.log("flash_greeting");
         await this.loader.flash_greeting();
         console.log("init_flash");
