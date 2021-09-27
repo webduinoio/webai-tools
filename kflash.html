@@ -1,44 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Document</title>
-</head>
+  <body>
+    <select id="baudrate">
+      <option value="1000000">低 - 1000000</option>
+      <option value="1500000" selected>中 - 1500000</option>
+      <option value="2000000">高 - 2000000</option>
+    </select>
+    <button id="connect">準備韌體中...</button><span id="progress"></span>
+    <span id="interval"></span>
+  </body>
+  <script src="lib/pako_inflate.min.js"></script>
+  <script src="lib/crc.js"></script>
+  <script type="module">
+    connect.disabled = true;
+    
+    import kflash from "./kflash.js";
+    fetch("firmware/webai.bin")
+      .then((response) => {
+        if (response.status === 200)
+          return response.blob();
+        else
+          throw new Error('Firmware is not Found')
+      })
+      .then((data) => {
+        const firmware = data;
 
-<body>
-  <select id="baudrate">
-    <option value="1000000">低 - 1000000</option>
-    <option value="1500000" selected>中 - 1500000</option>
-    <option value="2000000">高 - 2000000</option>
-  </select>
-  <button id="connect">更新韌體</button><span id='progress'></span> <span id='interval'></span>
-</body>
-<script src="lib/pako_inflate.min.js"></script>
-<script src="lib/crc.js"></script>
-<script type="module">
-  let firmware = null; 
-  import kflash from "./kflash.js"; 
-  fetch("firmware/webai.bin")
-    .then((response) => { return response.blob(); })
-    .then((data) => { 
-        firmware = data; 
+        connect.innerHTML = '更新韌體'
         console.log(firmware);
-        connect.disabled = false
-    }); 
-    connect.onclick = async () => { 
-        let start_time = null;
-        await kflash.requestSerialPort();
-        kflash.setBaudRate(baudrate.options[baudrate.selectedIndex].value); 
-        await kflash.write(0x000000, firmware, (percent)=>{
+        connect.disabled = false;
+        connect.onclick = async () => {
+          let start_time = null;
+          await kflash.requestSerialPort();
+          kflash.setBaudRate(baudrate.options[baudrate.selectedIndex].value);
+          await kflash.write(0x000000, firmware, (percent) => {
             if (percent === 0) start_time = new Date();
             const end_time = new Date();
             progress.innerHTML = `進度 ${percent}%`;
-            interval.innerHTML = `時間 ${(end_time - start_time) / 1000}s`
-        });
-    };
-</script>
-
+            interval.innerHTML = `時間 ${(end_time - start_time) / 1000}s`;
+          });
+        };
+      });
+  </script>
 </html>
