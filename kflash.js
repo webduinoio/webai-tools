@@ -71,7 +71,7 @@ class KFlash {
     async write(address, blob, listener) {
         const _port = this.port;
         const ISP_RECEIVE_TIMEOUT = 2;
-        const MAX_RETRY_TIMES = 10;
+        const MAX_RETRY_TIMES = 20;
         const ISP_FLASH_SECTOR_SIZE = 4096;
         const ISP_FLASH_DATA_FRAME_SIZE = ISP_FLASH_SECTOR_SIZE * 16;
         const isp_bytearray = ISP_PROG.match(/.{1,2}/g).map((e) => parseInt(e, 16));
@@ -438,6 +438,7 @@ class KFlash {
                 while (true) {
                     await this.write(packet);
                     retry_count++;
+                    console.log('retry..', retry_count)
                     try {
                         const result = FlashModeResponse.parse(
                             await this.recv_one_return()
@@ -445,9 +446,8 @@ class KFlash {
                         op = result[0];
                         reason = result[1];
                     } catch (e) {
-                        // console.log("Failed to initialize flash");
-                        throw "InitalizeFlashError";
-                        continue;
+                        console.log("Failed to initialize flash", e);
+                        continue
                     }
 
                     if (
