@@ -22,7 +22,7 @@
     connect.disabled = true;
     
     import kflash from "./kflash.js";
-    fetch("firmware/webai.bin")
+    fetch("./kflash.js")
       .then((response) => {
         if (response.status === 200)
           return response.blob();

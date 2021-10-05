@@ -467,7 +467,7 @@ class KFlash {
                 }
             }
 
-            async flash_firmware(firmware_bin, address_offset = 0, listener) {
+            async flash_firmware(firmware_bin, address = 0, listener) {
                 if (firmware_bin instanceof Blob) {
                     firmware_bin = await firmware_bin.arrayBuffer();
                 }
@@ -565,7 +565,7 @@ class KFlash {
         await this.loader.init_flash();
 
         console.log("flash_firmware");
-        await this.loader.flash_firmware(blob, 0, listener);
+        await this.loader.flash_firmware(blob, address, listener);
 
         // 3. boot
         await this.loader.reset_to_boot();
