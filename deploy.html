@@ -23,8 +23,8 @@
     await repl.connectBoard()
     msg.innerHTML = 'uploading...';
     await repl.enterRAWREPL()
-    var size = await repl.uploadFile(ctx.value, file);
-    msg.innerHTML = 'upload ' + file + ' ,size:' + size + ' bytes';
+    await repl.uploadFile('mini', file, ctx.value);
+    msg.innerHTML = 'upload ' + file
     await repl.restart();
     upload.disabled = false;
   })
