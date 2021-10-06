@@ -137,11 +137,14 @@ class REPL {
     return 0;
   }
 
-  async uploadFile(type, file, pythonCode) {
+  async uploadFile(type, filename, pythonCode) {
+    /**
+     * type: std|mini
+     */
     console.log("upload file...");
     await this.writer.write(Int8Array.from([0x03, 0x0d, 0x0a, 0x01])); //start
     await this.writer.write(
-      this.encoder.encode(generateUploadCode(type, file, pythonCode))
+      this.encoder.encode(generateUploadCode(type, filename, pythonCode))
     );
     await this.writer.write(Int8Array.from([0x04, 0x0d, 0x0a, 0x02])); //end
     await this.waitResponse("save", 1000);
