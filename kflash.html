@@ -10,10 +10,13 @@
   <body>
     <select id="baudrate">
       <option value="1000000">低 - 1000000</option>
-      <option value="1500000" selected>中 - 1500000</option>
-      <option value="2000000">高 - 2000000</option>
+      <option value="1500000">中 - 1500000</option>
+      <option value="2000000" selected>高 - 2000000</option>
     </select>
     <button id="connect">準備韌體中...</button><span id="progress"></span>
+    <div>
+      <button id="deploy">部署程式</button>
+    </div>
     <span id="interval"></span>
   </body>
   <script src="lib/pako_inflate.min.js"></script>
@@ -23,6 +26,7 @@
     
     import kflash from "./kflash.js";
     fetch("./kflash.js")
+    // fetch("./firmware/webai.bin")
       .then((response) => {
         if (response.status === 200)
           return response.blob();
@@ -39,13 +43,26 @@
           let start_time = null;
           await kflash.requestSerialPort();
           kflash.setBaudRate(baudrate.options[baudrate.selectedIndex].value);
-          await kflash.write(0x000000, firmware, (percent) => {
+          await kflash.write(0xD40000, firmware, (percent) => {
             if (percent === 0) start_time = new Date();
             const end_time = new Date();
             progress.innerHTML = `進度 ${percent}%`;
             interval.innerHTML = `時間 ${(end_time - start_time) / 1000}s`;
           });
+          
         };
+        
+        const code = `
+from webai_blockly import Lcd
+view = Lcd()
+view.displayImg(img=(webai.res.loadImg('mright.jpg')))`
+
+        deploy.onclick = async () => {
+          await kflash.requestSerialPort();
+          await kflash.enterRAWREPL();
+          await kflash.uploadFile('mini', 'main.py', code)
+          await kflash.restart();
+        }
       });
   </script>
 </html>

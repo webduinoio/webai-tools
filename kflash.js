@@ -2,6 +2,40 @@ import struct from "./lib/struct.mjs";
 import ISP_PROG from "./lib/isp.js";
 
 const delay = async(sec) => new Promise((r) => setTimeout(r, sec * 1000));
+const generateUploadCode = (type, file, pythonCode) => {
+    const code = `
+pycode = """
+${pythonCode}
+"""
+from Maix import utils
+import gc, machine, ujson
+
+# write python code
+with open('${file}', 'w') as f:
+    f.write(pycode)
+with open ('${file}', 'r') as f:
+    content = f.read()
+    #print(content)
+    print(len(content), 'bytes')
+    
+
+# save firmware type
+romFlagAddressStart = 0x1FFFF
+preFlag = int.from_bytes(utils.flash_read(romFlagAddressStart, 1), "big")
+romFlag = 1 if "${type}" == "mini" else 0
+if preFlag != romFlag:
+    utils.flash_write(romFlagAddressStart, bytes([romFlag]))
+
+deployCmd = '_DEPLOY/{\\"url\\": \\"local\\"}'
+
+# save command
+cfg.init()
+cfg.put('cmd', deployCmd)
+machine.reset()
+`.replace("\\", "\\\\");
+  
+    return code;
+};
 
 class Port {
     async init() {
@@ -14,6 +48,7 @@ class Port {
             bufferSize: 256 * 1024
         });
         this.textEncoder = new TextEncoder();
+        this.textDecoder = new TextDecoder();
     }
 
     async changeBaud(speed) {
@@ -60,15 +95,23 @@ class Port {
 
 class KFlash {
     async requestSerialPort() {
-        this.port = new Port();
-        await this.port.init();
-        await this.port.openReader();
-        await this.port.openWriter();
+        if (!this.port){
+            this.port = new Port();
+            await this.port.init();
+            await this.port.openReader();
+            await this.port.openWriter();
+            
+            this.resp = "";
+            setTimeout( async () => {
+                await this.readLoop();
+            }, 10);
+        }
     }
     async setBaudRate(baudrate = 2000000) {
         this.baudRate = baudrate
     }
     async write(address, blob, listener) {
+        this.initReadLoop = false
         const _port = this.port;
         const ISP_RECEIVE_TIMEOUT = 2;
         const MAX_RETRY_TIMES = 20;
@@ -569,8 +612,63 @@ class KFlash {
 
         // 3. boot
         await this.loader.reset_to_boot();
+        await this.loader.change_baudrate(115200);
         console.log("Rebooting...");
     }
+    async restart() {
+        await this.port.setDTR(0);
+        await delay(0.1)
+        await this.port.setDTR(1);
+        await delay(2)
+    }
+    async enterRAWREPL() {
+        console.log("enterREPL...");
+        this.changeBaud
+        this.initReadLoop = true
+        await this.restart();
+        await this.port.writer.write(Int8Array.from([[0x03]]));
+        await delay(0.5)
+    }
+
+    async waitResponse(msg, retryLimit = 100) {
+        while (--retryLimit > 0) {
+          await delay(0.01)
+          if (this.resp.indexOf(msg) >= 0) {
+            await delay(0.1)
+            this.resp = "";
+            return true;
+          }
+        }
+        return false;
+    }
+
+    
+    async readLoop() {
+        while (true) {
+          if (!this.initReadLoop) return 
+          const { value, done } = await this.port.reader.read();
+          this.resp += this.port.textDecoder.decode(value);
+          console.log(this.resp)
+          if (done) {
+            this.port.reader.releaseLock();
+            break;
+          }
+        }
+    }
+
+    async uploadFile(type, filename, pythonCode) {
+        /**
+         * type: std|mini
+         */
+        console.log("upload file...");
+        await this.port.writer.write(Int8Array.from([0x03, 0x0d, 0x0a, 0x01])); //start
+        await this.port.writer.write(
+          this.port.textEncoder.encode(generateUploadCode(type, filename, pythonCode))
+        );
+        await this.port.writer.write(Int8Array.from([0x04, 0x0d, 0x0a, 0x02])); //end
+        await this.waitResponse("save", 1000);
+    }
+
 }
 
 const kflash = new KFlash();
