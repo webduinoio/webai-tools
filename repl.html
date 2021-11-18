@@ -1,0 +1,48 @@
+<html lang="en">
+
+<head>
+  <script type="text/javascript" src="repl.js"></script>
+</head>
+ 
+<body>
+  <button id="connect">connect</button>
+  <button id="run">run</button><br>
+  <div id='msg'>wait to connect...</div>
+  <textarea id="ctx" rows="10" style="width:480px"></textarea><br>
+  <textarea id="resp" rows="10" style="width:480px"></textarea>
+  <script type="text/javascript">
+  var repl = new REPL()
+    fetch('./repl.py').then(function (response) {
+      return response.text();
+    }).then(async function (text) {
+      ctx.value = text;
+      msg.innerHTML = '';
+    });
+    repl.addListener(function(msg){
+      msg = msg.replace('\u0004\u0004>','');
+      resp.value = resp.value.replace('raw REPL; CTRL-B to exit\n>OK','');
+      resp.value = resp.value + msg;
+      resp.scrollTop = resp.scrollHeight;
+    })
+
+  connect.addEventListener('click', async () => {
+    connect.disabled = true;
+    await repl.connectBoard()
+    await repl.enterRAWREPL()
+    await repl.sendCmd('from webai import *')
+    await repl.sendCmd('webai.init()')
+    await repl.sendCmd('webai.lcd.init()')
+    connect.disabled = false;
+    connect.innerHTML = 'connected';
+  })
+
+  run.addEventListener('click', async () => {
+    run.disabled = true;
+    resp.value = '';
+    repl.sendCmd(ctx.value);
+    run.disabled = false;
+  })
+  </script>
+</body>
+
+</html>

@@ -37,6 +37,11 @@ class REPL {
   constructor() {
     this.encoder = new TextEncoder();
     this.decoder = new TextDecoder();
+    this.callback = function(){}
+  }
+
+  addListener(callback){
+    this.callback = callback;
   }
 
   async connectBoard() {
@@ -68,7 +73,8 @@ class REPL {
     while (true) {
       const { value, done } = await self.reader.read();
       self.resp += self.decoder.decode(value);
-      // console.log(self.resp)
+      self.callback(self.resp);
+      self.resp = "";
       if (done) {
         self.reader.releaseLock();
         break;
@@ -76,8 +82,15 @@ class REPL {
     }
   }
 
-  async sendCmd(str) {
+  async sendCmd2(str) {
+    str = str.replaceAll('\n','\r\n');
     await this.writer.write(this.encoder.encode(str + "\r\n"));
+  }
+
+  async sendCmd(str) {
+    await this.writer.write(Int8Array.from([0x01])); //start
+    await this.writer.write(this.encoder.encode(str+"\r\n"));
+    await this.writer.write(Int8Array.from([0x04])); //end
   }
 
   async restart() {
@@ -87,21 +100,8 @@ class REPL {
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
-  // async enterRAWREPL() {
-  //   do {
-  //     console.log("enterREPL....");
-  //     await this.restart();
-  //     for (var i = 0; i < 50; i++) {
-  //       await this.writer.write(Int16Array.from([0x13, 0x03, 0x03]));
-  //     }
-  //     await this.writer.write(Int16Array.from([0x13, 0x01]));
-  //     await this.waitResponse("raw REPL; CTRL-B to exit");
-  //     await this.writer.write(this.encoder.encode("\x05A\x01"));
-  //   } while (false == await this.waitResponse("raw REPL; CTRL-B to exit"));
-  // }
-
   async enterRAWREPL() {
-    console.log("enterREPL...");
+    //console.log("enterREPL...");
     await this.restart();
     await this.writer.write(Int8Array.from([[0x03]]));
     await new Promise((resolve) => setTimeout(resolve, 500));
