@@ -27,11 +27,12 @@
 
   connect.addEventListener('click', async () => {
     connect.disabled = true;
-    await repl.connectBoard()
-    await repl.enterRAWREPL()
-    await repl.sendCmd('from webai import *')
-    await repl.sendCmd('webai.init()')
-    await repl.sendCmd('webai.lcd.init()')
+    connect.innerHTML = 'connecting...';
+    await repl.usbConnect();
+    await repl.enter();
+    await repl.write('from webai import *')
+    await repl.write('webai.init()')
+    await repl.write('webai.lcd.init()')
     connect.disabled = false;
     connect.innerHTML = 'connected';
   })
@@ -39,7 +40,7 @@
   run.addEventListener('click', async () => {
     run.disabled = true;
     resp.value = '';
-    repl.sendCmd(ctx.value);
+    repl.write(ctx.value);
     run.disabled = false;
   })
   </script>

@@ -4,164 +4,167 @@ pycode = """
 ${pythonCode}
 """
 from Maix import utils
+from time import sleep
 import gc, machine, ujson
-
 # write python code
 with open('${file}', 'w') as f:
     f.write(pycode)
+sleep(0.5)
 with open ('${file}', 'r') as f:
     content = f.read()
-    #print(content)
-    print(len(content), 'bytes')
-    
-
 # save firmware type
 romFlagAddressStart = 0x1FFFF
 preFlag = int.from_bytes(utils.flash_read(romFlagAddressStart, 1), "big")
 romFlag = 1 if "${type}" == "mini" else 0
 if preFlag != romFlag:
     utils.flash_write(romFlagAddressStart, bytes([romFlag]))
-
-deployCmd = "_DEPLOY/{\\"url\\": \\"local\\"}"
-
-# save command
+deployCmd = '_DEPLOY/{"url":"local"}'
 cfg.init()
 cfg.put('cmd', deployCmd)
-machine.reset()
-`.replace("\\", "\\\\");
-
+`;
   return code;
 };
+
+class DataTransformer {
+  constructor() {
+    this.container = '';
+    this.decoder = new TextDecoder();
+    this.readLine = true;
+  }
+
+  setReadLine() {
+    this.readLine = true;
+    this.readByteArray = false;
+  }
+
+  setReadByteArray(bytes) {
+    this.readLine = false;
+    this.readByteArray = true;
+    this.readBytes = bytes;
+    this.byteArray = new Uint8Array();
+  }
+
+  transform(chunk, controller) {
+    if (this.readLine) {
+      chunk = this.decoder.decode(chunk);
+      this.container += chunk;
+      const lines = this.container.split('\r\n');
+      this.container = lines.pop();
+      lines.forEach(line => controller.enqueue(line));
+    }
+    if (this.readByteArray) {
+      this.byteArray = new Uint8Array([...this.byteArray, ...chunk]);
+      var byteArrayLength = this.byteArray.length;
+      if (byteArrayLength >= this.readBytes) {
+        var rtnByteArray = new Uint8Array([...this.byteArray.slice(0, this.readBytes)]);
+        this.byteArray = new Uint8Array(
+          [this.byteArray.slice(this.readBytes, byteArrayLength - this.readBytes)]);
+        console.log("chunk:", rtnByteArray);
+        controller.enqueue(rtnByteArray);
+      }
+    }
+  }
+
+  flush(controller) {
+    controller.enqueue(this.container);
+  }
+}
 
 class REPL {
   constructor() {
     this.encoder = new TextEncoder();
     this.decoder = new TextDecoder();
-    this.callback = function(){}
+    this.callback = function () {}
   }
 
-  addListener(callback){
+  addListener(callback) {
     this.callback = callback;
   }
 
-  async connectBoard() {
-    const filter = { usbVendorId: 6790 };
-    if (this.port != undefined) {
-      //console.log("reconnect..")
-      await this.writer.close();
-      await this.reader.cancel();
-      await this.port.close();
-    } else {
-      //console.log("connect..")
-      this.port = await navigator.serial.requestPort({ filters: [filter] });
-    }
-    await this.port.open({
-      baudRate: 115200,
-      dateBits: 8,
-      stopBits: 1,
-    });
-    this.writer = this.port.writable.getWriter();
-    this.reader = this.port.readable.getReader();
+  async usbConnect() {
     var self = this;
-    self.resp = "";
-    setTimeout(function () {
-      self.readLoop(self);
-    }, 10);
-  }
-
-  async readLoop(self) {
-    while (true) {
-      const { value, done } = await self.reader.read();
-      self.resp += self.decoder.decode(value);
-      self.callback(self.resp);
-      self.resp = "";
-      if (done) {
-        self.reader.releaseLock();
-        break;
+    const filter = { usbVendorId: 6790 };
+    if (self.port == undefined) {
+      self.port = await navigator.serial.requestPort({ filters: [filter] });
+      await this.port.open({ baudRate: 115200, dateBits: 8, stopBits: 1, });
+      this.writer = this.port.writable.getWriter();
+      this.stream = new DataTransformer();
+      this.reader = this.port.readable.
+      pipeThrough(new TransformStream(this.stream)).getReader();
+      self.port.ondisconnect = function () {
+        console.log("disconnect port");
+        self.port = null;
       }
     }
-  }
-
-  async sendCmd2(str) {
-    str = str.replaceAll('\n','\r\n');
-    await this.writer.write(this.encoder.encode(str + "\r\n"));
-  }
-
-  async sendCmd(str) {
-    await this.writer.write(Int8Array.from([0x01])); //start
-    await this.writer.write(this.encoder.encode(str+"\r\n"));
-    await this.writer.write(Int8Array.from([0x04])); //end
   }
 
   async restart() {
     await this.port.setSignals({ dataTerminalReady: false });
     await new Promise((resolve) => setTimeout(resolve, 100));
     await this.port.setSignals({ dataTerminalReady: true });
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 1700));
   }
 
-  async enterRAWREPL() {
-    //console.log("enterREPL...");
+  async enter() {
+    console.log("restart...")
     await this.restart();
-    await this.writer.write(Int8Array.from([[0x03]]));
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    for (var i = 0; i < 10; i++) {
+      await this.writer.write(Int8Array.from([0x03 /*interrupt*/ ]));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    this.stream.setReadLine(true);
+    //this.stream.setReadByteArray(16);
+    while (true) {
+      var { value, done } = await this.reader.read();
+      //console.log("enter:",value)
+      if (value == '>>> ') break;
+    }
+    console.log("REPL ready!");
   }
 
-  async waitResponse(msg, retryLimit = 100) {
-    while (--retryLimit > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      if (this.resp.indexOf(msg) >= 0) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        //console.log(this.resp);
-        this.resp = "";
-        return true;
+  async write(str) {
+    await this.writer.write(Int8Array.from([0x01 /*RAW paste mode*/ ]));
+    await this.writer.write(this.encoder.encode(str + '\r\n'));
+    await this.writer.write(Int8Array.from([0x04 /*exit*/ ]));
+    this.stream.setReadLine(true);
+    while (true) {
+      var { value, done } = await this.reader.read();
+      //console.log("###", value);
+      if (value.indexOf('>OK') == 0) {
+        value = value.substring(3);
+        break;
       }
     }
-    return false;
+    return value;
   }
 
-  async waitWriteCompleted(file, msg) {
-    var retryLimit = 1000;
-    while (--retryLimit > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      if (this.resp.indexOf("f.write") >= 0) {
-        if (this.resp.split("\n").length != 3) {
-          continue;
-        }
-        var size = this.resp.split("\n")[1].trim();
-        console.log("upload file:", file, " ,size:", size);
-        this.resp = "";
-        return size;
+  async writeAssert(str, rtn) {
+    this.stream.setReadLine(true);
+    await this.writer.write(Int8Array.from([0x01 /*RAW paste mode*/ ]));
+    await this.writer.write(this.encoder.encode(str));
+    await this.writer.write(Int8Array.from([0x04 /*exit*/ ]));
+    while (true) {
+      var { value, done } = await this.reader.read();
+      // console.log('>',value);
+      if (value.indexOf('>OK' + rtn) == 0) {
+        value = value.substring(3);
+        break;
       }
     }
-    return 0;
+    return value;
   }
 
   async uploadFile(type, filename, pythonCode) {
-    /**
-     * type: std|mini
-     */
-    console.log("upload file...");
-    await this.writer.write(Int8Array.from([0x03, 0x0d, 0x0a, 0x01])); //start
-    await this.writer.write(
-      this.encoder.encode(generateUploadCode(type, filename, pythonCode))
-    );
-    await this.writer.write(Int8Array.from([0x04, 0x0d, 0x0a, 0x02])); //end
-    await this.waitResponse("save", 1000);
+    pythonCode = generateUploadCode(type /*std|mini*/ , filename, pythonCode);
+    pythonCode = pythonCode.replace("\\", "\\\\");
+    return await this.writeAssert(pythonCode, "save");
   }
 
   async setWiFi(pythonCode, ssid, pwd) {
-    pythonCode = 'code="""\n' + pythonCode + '\n"""';
-    pythonCode = pythonCode.replace("\\", "\\\\");
-    await this.writer.write(this.encoder.encode(pythonCode + "\x04"));
-    await this.waitResponse("OK");
-    await this.writer.write(Int16Array.from([0x13, 0x02]));
-    await this.waitResponse("WebAI with kendryte-k210");
-    await this.sendCmd("cfg.init()");
-    await this.waitResponse("cfg.init()");
-    await this.sendCmd(
-      "cfg.put('wifi',{'ssid':'" + ssid + "','pwd':'" + pwd + "'})"
-    );
-    return this.waitResponse("save", 500);
+    pythonCode += "cfg.init()\n";
+    pythonCode += "cfg.put('wifi',{'ssid':'" + ssid + "','pwd':'" + pwd + "'})\n";
+    return this.writeAssert(pythonCode, 'save');
   }
 }
+
+console.log("load repl OKOK.....");

@@ -14,15 +14,15 @@
   <button id="setWiFi">設定 WiFi</button><br>
   <div id='msg'>wait to connect...</div>
   <script type="text/javascript">
-  var repl = new REPL()
+  var repl = new REPL();
 
   setWiFi.addEventListener('click', async () => {
     fetch('./wifi.py').then(function (response) {
       return response.text();
     }).then(async function (text) {
-      await repl.connectBoard();
+      await repl.usbConnect();
+      await repl.enter();
       msg.innerHTML = 'set wifi...';
-      await repl.enterRAWREPL();
       var state = await repl.setWiFi(text,ssid.value, pwd.value);
       msg.innerHTML = 'set wifi: ' + state;
       await repl.restart();

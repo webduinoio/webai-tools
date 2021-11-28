@@ -20,11 +20,11 @@
   upload.addEventListener('click', async () => {
     upload.disabled = true;
     var file = 'main.py';
-    await repl.connectBoard()
+    await repl.usbConnect();
     msg.innerHTML = 'uploading...';
-    await repl.enterRAWREPL()
-    await repl.uploadFile('mini', file, ctx.value);
-    msg.innerHTML = 'upload ' + file
+    await repl.enter()
+    var state = await repl.uploadFile('mini', file, ctx.value);
+    msg.innerHTML = 'upload ' + file+" ,"+state;
     await repl.restart();
     upload.disabled = false;
   })
