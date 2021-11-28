@@ -25,6 +25,22 @@ cfg.put('cmd', deployCmd)
   return code;
 };
 
+const snapshotCode = `
+from webai import *
+from time import sleep
+repl = UART.repl_uart()
+img = webai.snapshot()
+webai.show(img=img)
+jpg = img.compress(80)
+img = None
+jpg = jpg.to_bytes()
+repl.write("JPGSize:")
+repl.write(str(len(jpg)))
+repl.write('\\r\\n')
+sleep(0.005)
+repl.write(jpg)
+`
+
 class DataTransformer {
   constructor() {
     this.container = '';
@@ -59,7 +75,7 @@ class DataTransformer {
         var rtnByteArray = new Uint8Array([...this.byteArray.slice(0, this.readBytes)]);
         this.byteArray = new Uint8Array(
           [this.byteArray.slice(this.readBytes, byteArrayLength - this.readBytes)]);
-        console.log("chunk:", rtnByteArray);
+        //console.log("chunk:", rtnByteArray);
         controller.enqueue(rtnByteArray);
       }
     }
@@ -113,7 +129,6 @@ class REPL {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     this.stream.setReadLine(true);
-    //this.stream.setReadByteArray(16);
     while (true) {
       var { value, done } = await this.reader.read();
       //console.log("enter:",value)
@@ -126,10 +141,9 @@ class REPL {
     await this.writer.write(Int8Array.from([0x01 /*RAW paste mode*/ ]));
     await this.writer.write(this.encoder.encode(str + '\r\n'));
     await this.writer.write(Int8Array.from([0x04 /*exit*/ ]));
-    this.stream.setReadLine(true);
     while (true) {
       var { value, done } = await this.reader.read();
-      //console.log("###", value);
+      //console.log("#", value);
       if (value.indexOf('>OK') == 0) {
         value = value.substring(3);
         break;
@@ -143,12 +157,18 @@ class REPL {
     await this.writer.write(Int8Array.from([0x01 /*RAW paste mode*/ ]));
     await this.writer.write(this.encoder.encode(str));
     await this.writer.write(Int8Array.from([0x04 /*exit*/ ]));
+    var output = '';
+    var flag = false;
     while (true) {
       var { value, done } = await this.reader.read();
-      // console.log('>',value);
-      if (value.indexOf('>OK' + rtn) == 0) {
+      //console.log('#',value);
+      if (value.indexOf('>OK') == 0) {
+        flag = true;
         value = value.substring(3);
-        break;
+      }
+      if(flag){
+        output += value;
+        if(output.indexOf(rtn)>=0) break;
       }
     }
     return value;
@@ -165,6 +185,15 @@ class REPL {
     pythonCode += "cfg.put('wifi',{'ssid':'" + ssid + "','pwd':'" + pwd + "'})\n";
     return this.writeAssert(pythonCode, 'save');
   }
-}
 
-console.log("load repl OKOK.....");
+  async snapshot(){
+    var rtn = await repl.writeAssert(snapshotCode, 'JPGSize:');
+    rtn = rtn.substring('JPGSize:'.length);
+    repl.stream.setReadByteArray(parseInt(rtn));
+    var { value, done } = await repl.reader.read();
+    var jpg = new Blob([value], { type: "image/jpeg" });
+    var urlCreator = window.URL || window.webkitURL;
+    return urlCreator.createObjectURL(jpg);
+  }
+
+}

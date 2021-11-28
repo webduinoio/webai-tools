@@ -6,55 +6,45 @@
 
 <body>
   <button id="connect">connect</button>
-  <button id="run">run</button><br>
+  <button id="run">snapshot</button>
+  <button id="camera">camera</button><br>
   <div id='msg'>wait to connect...</div>
-  <textarea id="ctx" rows="10" style="width:480px"></textarea><br>
-  <textarea id="resp" rows="10" style="width:480px"></textarea>
+  <img id='photo' src='' width='320' height='240'>
   <script type="text/javascript">
   var repl = new REPL()
 
-  fetch('./snapshot.py').then(function (response) {
-    return response.text();
-  }).then(async function (text) {
-    ctx.value = text;
-    msg.innerHTML = '';
-  });
-
-  repl.addListener(function (msg) {
-    msg = msg.replace('\u0004\u0004>', '');
-    resp.value = resp.value.replace('raw REPL; CTRL-B to exit\n>OK', '');
-    resp.value = resp.value + msg;
-    resp.scrollTop = resp.scrollHeight;
-  })
-
   connect.addEventListener('click', async () => {
+    var code = `
+from webai import *
+webai.init()
+webai.clear()
+webai.lcd.init()
+webai.img = image.Image()
+webai.img.draw_rectangle(0,0,320,240, 0xffeaea, 1,fill=True)
+webai.lcd.display(webai.img)
+webai.draw_string(60,100,'REPL Ready...',scale=2,x_spacing=3)
+webai.img = None
+gc.collect()
+`;
     connect.disabled = true;
-    await repl.connectBoard()
-    await repl.enterRAWREPL()
-    var cmd1 = "from webai import *";
-    var cmd2 = "webai.init()\nwebai.clear()\nwebai.lcd.init()";
-    var cmd3 = "webai.img = image.Image()"
-    var cmd4 = "webai.img.draw_rectangle(0,0,320,240, 0xffeaea, 1,fill=True)";
-    var cmd5 = "webai.lcd.display(webai.img)";
-    var cmd6 = "webai.draw_string(60,100,'REPL Ready...',scale=2,x_spacing=3)";
-    var cmd7 = "webai.img = None"
-    var cmd8 = "gc.collect()"
-    await repl.sendCmd(cmd1);
-    await repl.sendCmd(cmd2);
-    await repl.sendCmd(cmd3);
-    await repl.sendCmd(cmd4);
-    await repl.sendCmd(cmd5);
-    await repl.sendCmd(cmd6);
-    await repl.sendCmd(cmd7);
-    await repl.sendCmd(cmd8);
+    await repl.usbConnect()
+    await repl.enter()
+    await repl.write(code);
     connect.disabled = false;
   })
 
   run.addEventListener('click', async () => {
     run.disabled = true;
-    resp.value = '';
-    repl.sendCmd(ctx.value);
+    photo.src = await repl.snapshot();
     run.disabled = false;
+  })
+
+  camera.addEventListener('click', async () => {
+    camera.disabled = true;
+    while (true) {
+      photo.src = await repl.snapshot();
+    };
+    camera.disabled = false;
   })
   </script>
 </body>
