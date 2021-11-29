@@ -37,7 +37,7 @@ jpg = jpg.to_bytes()
 repl.write("JPGSize:")
 repl.write(str(len(jpg)))
 repl.write('\\r\\n')
-sleep(0.005)
+sleep(0.01)
 repl.write(jpg)
 `
 
@@ -128,7 +128,7 @@ class REPL {
       await this.writer.write(Int8Array.from([0x03 /*interrupt*/ ]));
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    this.stream.setReadLine(true);
+    this.stream.setReadLine();
     while (true) {
       var { value, done } = await this.reader.read();
       //console.log("enter:",value)
@@ -137,63 +137,76 @@ class REPL {
     console.log("REPL ready!");
   }
 
-  async write(str) {
+  async write(code, cb) {
+    var boundry = "===" + Math.random() + "==";
     await this.writer.write(Int8Array.from([0x01 /*RAW paste mode*/ ]));
-    await this.writer.write(this.encoder.encode(str + '\r\n'));
+    code = "\r\nprint('" + boundry + "')\r\n" + code;
+    code = code + "\r\nprint('" + boundry + "')\r\n";
+    await this.writer.write(this.encoder.encode(code));
     await this.writer.write(Int8Array.from([0x04 /*exit*/ ]));
+    var startBoundry = false;
+    var rtnObj;
     while (true) {
       var { value, done } = await this.reader.read();
-      //console.log("#", value);
-      if (value.indexOf('>OK') == 0) {
-        value = value.substring(3);
-        break;
+      if (this.stream.readLine) {
+        if (value == ">OK" + boundry) {
+          startBoundry = true;
+          continue;
+        }
+        if (value == boundry) {
+          return rtnObj;
+        } else if (startBoundry && cb != null) {
+          var { value, done } = await cb(value);
+          //console.log("val:", value);
+          if (done) return value;
+        }
+      }
+      if (this.stream.readByteArray) {
+        var { value, done } = await cb(value);
+        if (done) return value;
       }
     }
-    return value;
-  }
-
-  async writeAssert(str, rtn) {
-    this.stream.setReadLine(true);
-    await this.writer.write(Int8Array.from([0x01 /*RAW paste mode*/ ]));
-    await this.writer.write(this.encoder.encode(str));
-    await this.writer.write(Int8Array.from([0x04 /*exit*/ ]));
-    var output = '';
-    var flag = false;
-    while (true) {
-      var { value, done } = await this.reader.read();
-      //console.log('#',value);
-      if (value.indexOf('>OK') == 0) {
-        flag = true;
-        value = value.substring(3);
-      }
-      if(flag){
-        output += value;
-        if(output.indexOf(rtn)>=0) break;
-      }
-    }
-    return value;
   }
 
   async uploadFile(type, filename, pythonCode) {
     pythonCode = generateUploadCode(type /*std|mini*/ , filename, pythonCode);
     pythonCode = pythonCode.replace("\\", "\\\\");
-    return await this.writeAssert(pythonCode, "save");
+    return await this.write(pythonCode, function (value) {
+      if (value.substring(0, 4) == 'save') {
+        return { 'value': value, 'done': true };
+      }
+    });
   }
 
   async setWiFi(pythonCode, ssid, pwd) {
     pythonCode += "cfg.init()\n";
     pythonCode += "cfg.put('wifi',{'ssid':'" + ssid + "','pwd':'" + pwd + "'})\n";
-    return this.writeAssert(pythonCode, 'save');
+    return await this.write(pythonCode, function (value) {
+      if (value.substring(0, 4) == 'save') {
+        return { 'value': value, 'done': true };
+      }
+    });
   }
 
-  async snapshot(){
-    var rtn = await repl.writeAssert(snapshotCode, 'JPGSize:');
-    rtn = rtn.substring('JPGSize:'.length);
-    repl.stream.setReadByteArray(parseInt(rtn));
-    var { value, done } = await repl.reader.read();
-    var jpg = new Blob([value], { type: "image/jpeg" });
-    var urlCreator = window.URL || window.webkitURL;
-    return urlCreator.createObjectURL(jpg);
+  async snapshot() {
+    var val = await this.write(snapshotCode,
+      async function (msg) {
+        var value = msg;
+        var done = false;
+        if (value.substring(0, 8) == 'JPGSize:') {
+          value = value.substring(8);
+          done = true;
+        }
+        return { 'value': value, 'done': done }
+      });
+    this.stream.setReadByteArray(parseInt(val));
+    var img = await this.write('repl.write(jpg)', async function (value) {
+      var jpg = new Blob([value], { type: "image/jpeg" });
+      var urlCreator = window.URL || window.webkitURL;
+      return { 'value': urlCreator.createObjectURL(jpg), 'done': true };
+    });
+    this.stream.setReadLine();
+    return img;
   }
 
 }
