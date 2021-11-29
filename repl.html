@@ -18,12 +18,6 @@
     ctx.value = text;
     msg.innerHTML = '';
   });
-  repl.addListener(function (msg) {
-    msg = msg.replace('\u0004\u0004>', '');
-    resp.value = resp.value.replace('raw REPL; CTRL-B to exit\n>OK', '');
-    resp.value = resp.value + msg;
-    resp.scrollTop = resp.scrollHeight;
-  })
 
   connect.addEventListener('click', async () => {
     connect.disabled = true;
@@ -36,7 +30,14 @@
     await repl.write(`
 from webai import *
 webai.init()
+webai.clear()
 webai.lcd.init()
+webai.img = image.Image()
+webai.img.draw_rectangle(0,0,320,240, 0xffeaea, 1,fill=True)
+webai.lcd.display(webai.img)
+webai.draw_string(60,100,'REPL Ready...',scale=2,x_spacing=3)
+webai.img = None
+gc.collect()
 `, function (data) {
       output += (data + "\r\n");
       resp.value = output;

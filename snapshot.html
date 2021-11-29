@@ -8,8 +8,8 @@
   <button id="connect">connect</button>
   <button id="run">snapshot</button>
   <button id="camera">camera</button><br>
-  <div id='msg'>wait to connect...</div>
-  <img id='photo' src='' width='320' height='240'>
+  <div id='msg'></div>
+  <img id='photo' src='https://shoplineimg.com/5b8cd726af6fe90005f4de3b/61693fc6275255003bc38569/800x.webp?source_format=jpg' width='320' height='240'>
   <script type="text/javascript">
   var repl = new REPL()
 
@@ -27,9 +27,13 @@ webai.img = None
 gc.collect()
 `;
     connect.disabled = true;
-    await repl.usbConnect()
-    await repl.enter()
+    msg.innerHTML = 'connecting...';
+    await repl.usbConnect();
+    msg.innerHTML = 'enter REPL...';
+    await repl.enter();
     await repl.write(code);
+    msg.innerHTML = 'connected';
+
     connect.disabled = false;
   })
 
