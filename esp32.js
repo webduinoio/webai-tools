@@ -101,7 +101,7 @@ class REPL {
     var self = this;
     const filter = { usbVendorId: 6790 };
     if (self.port == undefined) {
-      self.port = await navigator.serial.requestPort({ filters: [filter] });
+      self.port = await navigator.serial.requestPort({  });
       await this.port.open({ baudRate: 115200, dateBits: 8, stopBits: 1, });
       this.writer = this.port.writable.getWriter();
       this.stream = new DataTransformer();
@@ -154,7 +154,6 @@ class REPL {
           return rtnObj;
         } else if (startBoundry && cb != null) {
           var { value, done } = await cb(value);
-          //console.log("val:", value);
           if (done) return value;
         }
       }

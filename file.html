@@ -1,0 +1,84 @@
+<html lang="en">
+
+<head>
+  <script type="text/javascript" src="repl.js"></script>
+</head>
+
+<body>
+  <button id="connect">connect</button>
+  <button id="run">run</button><br>
+  <div id='msg'>wait to connect...</div>
+  <textarea id="ctx" rows="10" style="width:480px"></textarea><br>
+  <textarea id="resp" rows="10" style="width:480px"></textarea>
+  <script type="text/javascript">
+  var repl = new REPL()
+  fetch('./file.py').then(function (response) {
+    return response.text();
+  }).then(async function (text) {
+    ctx.value = text;
+    msg.innerHTML = '';
+  });
+
+  connect.addEventListener('click', async () => {
+    connect.disabled = true;
+    msg.innerHTML = 'connecting...';
+    resp.value = '';
+    await repl.usbConnect();
+    await repl.enter();
+    msg.innerHTML = 'connected';
+    resp.value = '';
+    var output = '';
+    console.log("webai init...");
+    await repl.write(`
+from webai import *
+webai.init()
+webai.clear()
+webai.lcd.init()
+webai.img = image.Image()
+webai.img.draw_rectangle(0,0,320,240, 0xffeaea, 1,fill=True)
+webai.lcd.display(webai.img)
+webai.draw_string(60,100,'REPL Ready...',scale=2,x_spacing=3)
+webai.img = None
+gc.collect()
+`, function (data) {
+      output += (data + "\r\n");
+      resp.value = output;
+      return { value: '', done: false }
+    });
+    console.log("webai init...OK");
+    connect.disabled = false;
+    connect.innerHTML = 'connected';
+  })
+
+  run.addEventListener('click', async () => {
+    run.disabled = true;
+    resp.value = '';
+    var output = '';
+    await openFile("test.txt");
+    //repl.writer.write(new Uint8Array([0x03,0x13,0x10,0x30,0x31,0x32]));
+    repl.writer.write(Int8Array.from([0x30,0x31,0x32]));
+    console.log("save OK");
+    run.disabled = false;
+  })
+
+  async function openFile(filename){
+    var output = '';
+        await repl.write(`
+from Maix import utils
+webai.clear()
+repl = UART.repl_uart()
+f = open("test2.txt", "wb")
+zzz = repl.read(3)
+f.write(str(zzz))
+f.close()
+`, function (data) {
+      output += (data + "\r\n");
+      resp.value = output;
+      return { value: '', done: false }
+    });
+  }
+
+  </script>
+</body>
+
+</html>
