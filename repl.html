@@ -4,12 +4,12 @@
   <script type="text/javascript" src="repl.js"></script>
 </head>
 
-<body>
+<body style='background-color: #334455;'>
   <button id="connect">connect</button>
-  <button id="run">run</button><br>
-  <div id='msg'>wait to connect...</div>
-  <textarea id="ctx" rows="10" style="width:480px"></textarea><br>
-  <textarea id="resp" rows="10" style="width:480px"></textarea>
+  <button id="run">run</button><br><br>
+  <div id='msg' style='color:#FFeeAA'>wait to connect...</div>
+  <textarea id="ctx" rows="20" style="width:880px"></textarea><br><br>
+  <textarea id="resp" rows="20" style="width:880px"></textarea>
   <script type="text/javascript">
   var repl = new REPL()
   fetch('./repl.py').then(function (response) {
@@ -45,6 +45,7 @@ gc.collect()
     });
     connect.disabled = false;
     connect.innerHTML = 'connected';
+    msg.innerHTML = 'Ready';
   })
 
   run.addEventListener('click', async () => {

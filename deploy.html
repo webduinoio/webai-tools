@@ -10,7 +10,7 @@
   <textarea id="ctx" rows="20" style="width:320px"></textarea>
   <script type="text/javascript">
   var repl = new REPL()
-    fetch('./demo.py').then(function (response) {
+    fetch('./deploy.py').then(function (response) {
       return response.text();
     }).then(async function (text) {
       ctx.value = text;
