@@ -1,3 +1,18 @@
+const generateESP32UploadCode = (file, pythonCode) => {
+  code = `
+pycode = """
+${pythonCode}
+"""
+import machine
+# write python code
+with open('${file}', 'w') as f:
+    f.write(pycode)
+with open ('${file}', 'r') as f:
+    content = f.read()
+`;
+  return code;
+};
+
 const generateUploadCode = (type, file, pythonCode) => {
   code = `
 pycode = """
@@ -114,22 +129,27 @@ class REPL {
     }
   }
 
-  async restart() {
+  async restart(chip) {
     await this.port.setSignals({ dataTerminalReady: false });
     await new Promise((resolve) => setTimeout(resolve, 100));
     await this.port.setSignals({ dataTerminalReady: true });
-    await new Promise((resolve) => setTimeout(resolve, 1700));
+    if (chip == 'esp32') {
+      console.log("esp32 restart")
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 1700));
+    }
   }
 
-  async enter() {
-    console.log("restart...")
-    await this.restart();
-    for (var i = 0; i < 10; i++) {
+  async enter(chip) {
+    console.log(">>> restart...", chip)
+    await this.restart(chip);
+    for (var i = 0; i < 3; i++) {
       await this.writer.write(Int8Array.from([0x03 /*interrupt*/ ]));
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    await this.write('',function(data){
-      return {value:'',done:false}
+    await this.write('', function (data) {
+      return { value: '', done: false }
     })
     console.log("REPL ready!");
   }
@@ -142,9 +162,10 @@ class REPL {
     await this.writer.write(this.encoder.encode(code));
     await this.writer.write(Int8Array.from([0x04 /*exit*/ ]));
     var startBoundry = false;
-    var rtnObj;
+    var rtnObj = ""+code.length;
     while (true) {
       var { value, done } = await this.reader.read();
+      //console.log("value:", value);
       if (this.stream.readLine) {
         if (value == ">OK" + boundry) {
           startBoundry = true;
@@ -154,7 +175,6 @@ class REPL {
           return rtnObj;
         } else if (startBoundry && cb != null) {
           var { value, done } = await cb(value);
-          //console.log("val:", value);
           if (done) return value;
         }
       }
@@ -166,13 +186,24 @@ class REPL {
   }
 
   async uploadFile(type, filename, pythonCode) {
-    pythonCode = generateUploadCode(type /*std|mini*/ , filename, pythonCode);
-    pythonCode = pythonCode.replace("\\", "\\\\");
-    return await this.write(pythonCode, function (value) {
-      if (value.substring(0, 4) == 'save') {
-        return { 'value': value, 'done': true };
-      }
-    });
+    if (type == 'esp32') {
+      pythonCode = generateESP32UploadCode(filename, pythonCode);
+      pythonCode = pythonCode.replace("\\", "\\\\");
+      var rtn = await this.write(pythonCode, function (value) {
+        if (value.substring(0, 4) == 'save') {
+          return { 'value': value, 'done': true };
+        }
+      });
+      return rtn;
+    } else {
+      pythonCode = generateUploadCode(type /*std|mini*/ , filename, pythonCode);
+      pythonCode = pythonCode.replace("\\", "\\\\");
+      return await this.write(pythonCode, function (value) {
+        if (value.substring(0, 4) == 'save') {
+          return { 'value': value, 'done': true };
+        }
+      });
+    }
   }
 
   async setWiFi(pythonCode, ssid, pwd) {

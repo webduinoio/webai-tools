@@ -1,0 +1,68 @@
+<html lang="en">
+
+<head>
+  <script type="text/javascript" src="repl.js"></script>
+</head>
+
+<body>
+  <button id="connect">connect</button>
+  <button id="run">run</button>
+  <button id="upload">upload</button><br><br>
+  <div id='msg'>wait to connect...</div>
+  <textarea id="ctx" rows="10" style="width:480px"></textarea><br>
+  <textarea id="resp" rows="10" style="width:480px"></textarea>
+  <script type="text/javascript">
+  var repl = new REPL()
+  fetch('./esp32.py').then(function (response) {
+    return response.text();
+  }).then(async function (text) {
+    ctx.value = text;
+    msg.innerHTML = '';
+  });
+
+  connect.addEventListener('click', async () => {
+    connect.disabled = true;
+    msg.innerHTML = 'connecting...';
+    resp.value = '';
+    await repl.usbConnect();
+    await repl.enter('esp32');
+    resp.value = '';
+    var output = '';
+    await repl.write(`
+print('REPL Ready...')
+`, function (data) {
+      output += (data + "\r\n");
+      resp.value = output;
+      return { value: '', done: false }
+    });
+    connect.disabled = false;
+    msg.innerHTML = 'connected';
+  })
+
+  run.addEventListener('click', async () => {
+    run.disabled = true;
+    resp.value = '';
+    var output = '';
+    await repl.write(ctx.value, function (data) {
+      output += (data + "\r\n");
+      resp.value = output;
+      return { value: '', done: false }
+    });
+    run.disabled = false;
+  })
+
+  upload.addEventListener('click', async () => {
+    upload.disabled = true;
+    var file = 'main.py';
+    await repl.usbConnect();
+    msg.innerHTML = 'uploading...';
+    await repl.enter('esp32')
+    var writeLen = await repl.uploadFile('esp32', file, ctx.value);
+    msg.innerHTML = 'upload ' + file + " ," + writeLen +" Bytes" ;
+    await repl.restart();
+    upload.disabled = false;
+  })
+  </script>
+</body>
+
+</html>

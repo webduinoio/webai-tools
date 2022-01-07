@@ -23,7 +23,7 @@
     await repl.usbConnect();
     msg.innerHTML = 'uploading...';
     await repl.enter()
-    var state = await repl.uploadFile('mini', file, ctx.value);
+    var state = await repl.uploadFile('esp32', file, ctx.value);
     msg.innerHTML = 'upload ' + file+" ,"+state;
     await repl.restart();
     upload.disabled = false;
